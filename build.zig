@@ -55,7 +55,9 @@ pub const CreateClapPluginStep = struct {
             _ = try dir.updateFile("zig-out/lib/clap-shaker.dll", dir, "zig-out/lib/clap-shaker.dll.clap", .{});
         } else if (self.artifact.target.isDarwin()) {
             var dir = std.fs.cwd();
-            _ = try dir.updateFile("zig-out/lib/libclap-shaker.dylib", dir, "zig-out/lib/Noise Shaker.clap/Contents/MacOs/Noise Shaker", .{});
+            _ = try dir.updateFile("zig-out/lib/libclap-shaker.dylib", dir, "zig-out/lib/Noise Shaker.clap/Contents/MacOS/Noise Shaker", .{});
+            _ = try dir.updateFile("macos/info.plist", dir, "zig-out/lib/Noise Shaker.clap/Contents/info.plist", .{});
+            _ = try dir.updateFile("macos/PkgInfo", dir, "zig-out/lib/Noise Shaker.clap/Contents/PkgInfo", .{});
         }
     }
 };
