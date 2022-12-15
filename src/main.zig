@@ -9,9 +9,6 @@ const util = @import("util.zig");
 const c_cast = std.zig.c_translation.cast;
 const global = @import("global.zig");
 
-var prng = std.rand.DefaultPrng.init(0);
-pub var rng: std.rand.Random = undefined;
-
 pub const Params = struct {
     const Values = struct {
         gain_amplitude: f64 = 0.0,
@@ -499,10 +496,7 @@ pub fn clap_version_is_compatible(v: c.clap_version_t) bool {
 const Entry = struct {
     fn init(plugin_path: [*c]const u8) callconv(.C) bool {
         _ = plugin_path;
-
         global.init();
-        rng = prng.random();
-
         return true;
     }
     fn deinit() callconv(.C) void {}
