@@ -385,6 +385,7 @@ pub const MyPlugin = struct {
         0.0,
         0.0,
     };
+    var on_sample: usize = 0;
 
     fn do_process(plugin: [*c]const c.clap_plugin_t, process: [*c]const c.clap_process_t) callconv(.C) c.clap_process_status {
         var plug = c_cast(*MyPlugin, plugin.*.plugin_data);
@@ -416,16 +417,17 @@ pub const MyPlugin = struct {
             var param_gain_amp = @floatCast(f32, Params.values.gain_amplitude);
 
             while (frame_index < next_event_frame) : (frame_index += 1) {
-                // white noise
+                var saw = util.sawWaveBackwards(on_sample, 44100 / 4);
                 const out = [2]f32{
-                    util.randAmplitudeValue() * param_gain_amp,
-                    util.randAmplitudeValue() * param_gain_amp,
+                    util.randAmplitudeValue() * param_gain_amp * saw,
+                    util.randAmplitudeValue() * param_gain_amp * saw,
                 };
-
-                prev_sample = out;
 
                 process.*.audio_outputs[0].data32[0][frame_index] = out[0];
                 process.*.audio_outputs[0].data32[1][frame_index] = out[1];
+
+                on_sample += 1;
+                prev_sample = out;
             }
         }
 
