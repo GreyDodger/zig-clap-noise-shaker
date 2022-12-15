@@ -31,9 +31,9 @@ pub fn build(b: *std.build.Builder) void {
     //b.getInstallStep().dependOn(&rename_dll_step.step);
     //}
 
-    const rename_dll_step = CreateMacOSBundle.create(b);
-    rename_dll_step.step.dependOn(&exe.install_step.?.step);
-    b.getInstallStep().dependOn(&rename_dll_step.step);
+    //const rename_dll_step = CreateMacOSBundle.create(b);
+    //rename_dll_step.step.dependOn(&exe.install_step.?.step);
+    //b.getInstallStep().dependOn(&rename_dll_step.step);
 }
 
 pub const RenameDllStep = struct {
