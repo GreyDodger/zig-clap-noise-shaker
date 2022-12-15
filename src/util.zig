@@ -7,7 +7,7 @@ pub inline fn amplitudeTodB(amplitude: f32) f32 {
 }
 
 pub inline fn dBToAmplitude(dB: f32) f32 {
-    return math.pow(f32, 10.0, dB/20.0);
+    return math.pow(f32, 10.0, dB / 20.0);
 }
 
 pub inline fn randAmplitudeValue() f32 {
