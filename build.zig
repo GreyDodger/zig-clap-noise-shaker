@@ -19,69 +19,43 @@ pub fn build(b: *std.build.Builder) void {
     exe.addIncludePath("src");
     exe.setTarget(target);
     exe.setBuildMode(mode);
-
     exe.install();
 
-    // TODO
-    // figure out how to read the current target
-
-    //if(target.os_tag.? == .Windows) {
-    //const rename_dll_step = RenameDllStep.create(b);
-    //rename_dll_step.step.dependOn(&exe.install_step.?.step);
-    //b.getInstallStep().dependOn(&rename_dll_step.step);
-    //}
-
-    //const rename_dll_step = CreateMacOSBundle.create(b);
-    //rename_dll_step.step.dependOn(&exe.install_step.?.step);
-    //b.getInstallStep().dependOn(&rename_dll_step.step);
+    const rename_dll_step = CreateClapPluginStep.create(b, exe);
+    b.getInstallStep().dependOn(&rename_dll_step.step);
 }
 
-pub const RenameDllStep = struct {
+pub const CreateClapPluginStep = struct {
     pub const base_id = .top_level;
+
+    const Self = @This();
 
     step: Step,
     builder: *Builder,
+    artifact: *std.build.LibExeObjStep,
 
-    pub fn create(builder: *Builder) *RenameDllStep {
-        const self = builder.allocator.create(RenameDllStep) catch unreachable;
-        const name = "rename dll";
+    pub fn create(builder: *Builder, artifact: *std.build.LibExeObjStep) *Self {
+        const self = builder.allocator.create(Self) catch unreachable;
+        const name = "create clap plugin";
 
-        self.* = RenameDllStep{
+        self.* = Self{
             .step = Step.init(.top_level, name, builder.allocator, make),
             .builder = builder,
+            .artifact = artifact,
         };
 
+        self.step.dependOn(&artifact.step);
         return self;
     }
 
     fn make(step: *Step) !void {
-        _ = step;
-        var dir = std.fs.cwd();
-        _ = try dir.rename("zig-out/lib/clap-shaker.dll", "zig-out/lib/clap-shaker.dll.clap");
-    }
-};
-
-pub const CreateMacOSBundle = struct {
-    pub const base_id = .top_level;
-
-    step: Step,
-    builder: *Builder,
-
-    pub fn create(builder: *Builder) *CreateMacOSBundle {
-        const self = builder.allocator.create(CreateMacOSBundle) catch unreachable;
-        const name = "create macos bundle";
-
-        self.* = CreateMacOSBundle{
-            .step = Step.init(.top_level, name, builder.allocator, make),
-            .builder = builder,
-        };
-
-        return self;
-    }
-
-    fn make(step: *Step) !void {
-        _ = step;
-        var dir = std.fs.cwd();
-        _ = try dir.rename("zig-out/lib/libclap-shaker.dylib", "zig-out/lib/Noise Shaker.clap/Contents/MacOS/Noise Shaker");
+        const self = @fieldParentPtr(Self, "step", step);
+        if (self.artifact.target.isWindows()) {
+            var dir = std.fs.cwd();
+            _ = try dir.updateFile("zig-out/lib/clap-shaker.dll", dir, "zig-out/lib/clap-shaker.dll.clap", .{});
+        } else if (self.artifact.target.isDarwin()) {
+            var dir = std.fs.cwd();
+            _ = try dir.updateFile("zig-out/lib/libclap-shaker.dylib", dir, "zig-out/lib/Noise Shaker.clap/Contents/MacOs/Noise Shaker", .{});
+        }
     }
 };
