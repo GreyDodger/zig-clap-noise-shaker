@@ -24,9 +24,11 @@ pub inline fn sawWaveBackwards(on_sample: usize, wavelength: usize) f32 {
 
 pub inline fn envAD(on_sample: usize, length_a: usize, length_d: usize) f32 {
     if (on_sample < length_a) {
-        return sawWave(on_sample, length_a);
+        const result = sawWave(on_sample, length_a);
+        return result * result * result;
     } else if (on_sample < (length_a + length_d)) {
-        return sawWaveBackwards(on_sample - length_a, length_d);
+        const result = sawWaveBackwards(on_sample - length_a, length_d);
+        return result * result * result;
     }
     return 0.0;
 }
