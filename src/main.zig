@@ -449,17 +449,17 @@ pub const MyPlugin = struct {
     };
     var on_sample: usize = 0;
     var play: bool = false;
+    var block_sample_start: usize = 0;
+    var on_block_sample: usize = 0;
 
     fn do_process(plugin: [*c]const c.clap_plugin_t, process: [*c]const c.clap_process_t) callconv(.C) c.clap_process_status {
         var plug = c_cast(*MyPlugin, plugin.*.plugin_data);
 
         plug.tempo = process.*.transport.*.tempo;
-        const currently_playing = (process.*.transport.*.flags & c.CLAP_TRANSPORT_IS_PLAYING) != 0;
-        if (!play and currently_playing) {
-            const pos_seconds = @intToFloat(f64, process.*.transport.*.song_pos_seconds) / @intToFloat(f64, @as(i64, 1 << 31));
-            on_sample = @floatToInt(usize, std.math.round(pos_seconds * plug.sample_rate));
-        }
-        play = currently_playing;
+
+        const pos_seconds = @intToFloat(f64, process.*.transport.*.song_pos_seconds) / @intToFloat(f64, @as(i64, 1 << 31));
+        block_sample_start = @floatToInt(usize, std.math.round(pos_seconds * plug.sample_rate));
+        on_block_sample = 0;
 
         const num_frames = process.*.frames_count;
         const num_events = process.*.in_events.*.size.?(process.*.in_events);
@@ -499,7 +499,7 @@ pub const MyPlugin = struct {
             const length_d_4 = @floatToInt(usize, std.math.round((Params.values.length_d_beat_4 / 1000.0) * plug.sample_rate));
 
             while (frame_index < next_event_frame) : (frame_index += 1) {
-                if (!play) {} else {
+                if (play) {
                     const beat: struct { sample: usize, num: usize } = get_beat: {
                         var sample = on_sample % loop_sample_length;
                         var sample_length: usize = 0;
@@ -547,6 +547,8 @@ pub const MyPlugin = struct {
                     on_sample += 1;
                     prev_sample = out;
                 }
+
+                on_block_sample += 1;
             }
         }
 
@@ -568,9 +570,17 @@ pub const MyPlugin = struct {
                 c.CLAP_EVENT_MIDI => {
                     const ev = c_cast([*c]const c.clap_event_midi_t, hdr);
                     switch (ev.*.data[0]) {
-                        144 => { // Note On
+                        0x90 => { // Note On
                             const velocity = ev.*.data[2];
-                            _ = velocity;
+                            if (velocity == 0) {
+                                play = false;
+                            } else {
+                                play = true;
+                                on_sample = block_sample_start + on_block_sample;
+                            }
+                        },
+                        0x80 => { // Note Off
+                            play = false;
                         },
                         176 => { // CC
                             if (ev.*.data[1] == 1) {
