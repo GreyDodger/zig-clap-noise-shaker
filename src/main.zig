@@ -1,6 +1,11 @@
+const builtin = @import("builtin");
+
 pub const c = @cImport({
     @cInclude("clap/clap.h");
     @cInclude("string.h");
+    if (builtin.os.tag == .windows) {
+        @cInclude("windows.c");
+    }
 });
 
 const std = @import("std");
@@ -322,6 +327,7 @@ pub const MyPlugin = struct {
     fn activate(plugin: [*c]const c.clap_plugin_t, sample_rate: f64, min_frames_count: u32, max_frames_count: u32) callconv(.C) bool {
         var plug = c_cast(*MyPlugin, plugin.*.plugin_data);
         plug.sample_rate = sample_rate;
+        std.log.debug("activate {d:.2}", .{sample_rate});
         _ = min_frames_count;
         _ = max_frames_count;
         return true;
@@ -520,6 +526,13 @@ pub fn clap_version_is_compatible(v: c.clap_version_t) bool {
 const Entry = struct {
     fn init(plugin_path: [*c]const u8) callconv(.C) bool {
         _ = plugin_path;
+
+        // this is my current best idea on how to read logging
+        // reaper has hostLog extension, but I don't know how that works
+        if (builtin.os.tag == .windows) {
+            c.redirectStdOutToConsoleWindow();
+        }
+
         global.init();
         return true;
     }
