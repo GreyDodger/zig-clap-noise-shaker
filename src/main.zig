@@ -29,6 +29,7 @@ pub const Params = struct {
         gain_amplitude_beat_4: f64 = 1.0,
     };
     const ValueMeta = struct {
+        name: []const u8 = &[_]u8{},
         t: ValueType = .VolumeAmp,
         min_value: f64 = 0.0,
         max_value: f64 = 1.0,
@@ -43,17 +44,25 @@ pub const Params = struct {
 
     pub var values = Values{};
     var value_metas = [std.meta.fields(Values).len]ValueMeta{
-        .{ .t = .Bool },
-        .{},
-        .{ .t = .TimeMilliseconds, .min_value = 0.0, .max_value = 100 },
-        .{ .t = .TimeMilliseconds, .min_value = 0.0, .max_value = 500 },
-        .{ .t = .TimeMilliseconds, .min_value = 0.0, .max_value = 500 },
-        .{ .t = .TimeMilliseconds, .min_value = 0.0, .max_value = 500 },
-        .{ .t = .TimeMilliseconds, .min_value = 0.0, .max_value = 500 },
-        .{},
-        .{},
-        .{},
-        .{},
+        .{ .name = "Stereo", .t = .Bool },
+        .{ .name = "Volume" },
+        .{ .name = "Shaker Env: Attack", .t = .TimeMilliseconds, .min_value = 0.0, .max_value = 100 },
+        .{ .name = "Shaker Env: Delay (beat 1)", .t = .TimeMilliseconds, .min_value = 0.0, .max_value = 500 },
+        .{ .name = "Shaker Env: Delay (beat 2)", .t = .TimeMilliseconds, .min_value = 0.0, .max_value = 500 },
+        .{ .name = "Shaker Env: Delay (beat 3)", .t = .TimeMilliseconds, .min_value = 0.0, .max_value = 500 },
+        .{ .name = "Shaker Env: Delay (beat 4)", .t = .TimeMilliseconds, .min_value = 0.0, .max_value = 500 },
+        .{
+            .name = "% Volume Beat 1",
+        },
+        .{
+            .name = "% Volume Beat 2",
+        },
+        .{
+            .name = "% Volume Beat 3",
+        },
+        .{
+            .name = "% Volume Beat 4",
+        },
     };
 
     fn count(plugin: [*c]const c.clap_plugin_t) callconv(.C) u32 {
@@ -77,7 +86,11 @@ pub const Params = struct {
                     .flags = if (value_metas[index].t == .Bool) c.CLAP_PARAM_IS_STEPPED else 0,
                     .cookie = null,
                 };
-                _ = std.fmt.bufPrintZ(&info.*.name, field.name, .{}) catch unreachable;
+                if (value_metas[index].name.len > 0) {
+                    _ = std.fmt.bufPrintZ(&info.*.name, "{s}", .{value_metas[index].name}) catch unreachable;
+                } else {
+                    _ = std.fmt.bufPrintZ(&info.*.name, field.name, .{}) catch unreachable;
+                }
                 _ = std.fmt.bufPrintZ(&info.*.module, "params/" ++ field.name, .{}) catch unreachable;
             },
             else => {},
