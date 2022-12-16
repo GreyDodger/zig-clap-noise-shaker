@@ -17,6 +17,8 @@ const global = @import("global.zig");
 pub const Params = struct {
     const Values = struct {
         gain_amplitude_main: f64 = 0.0,
+        length_a: f64 = 0.0,
+        length_d: f64 = 1000.0,
         gain_amplitude_beat_1: f64 = 1.0,
         gain_amplitude_beat_2: f64 = 1.0,
         gain_amplitude_beat_3: f64 = 1.0,
@@ -30,6 +32,8 @@ pub const Params = struct {
     pub var values = Values{};
     var value_metas = [std.meta.fields(Values).len]ValueMeta{
         .{ .min_value = 0.0, .max_value = 1.0 },
+        .{ .min_value = 0.0, .max_value = 1000.0 },
+        .{ .min_value = 0.0, .max_value = 1000.0 },
         .{ .min_value = 0.0, .max_value = 1.0 },
         .{ .min_value = 0.0, .max_value = 1.0 },
         .{ .min_value = 0.0, .max_value = 1.0 },
@@ -441,10 +445,12 @@ pub const MyPlugin = struct {
 
             const gain_main = @floatCast(f32, Params.values.gain_amplitude_main);
             const wavelength_samples = @floatToInt(usize, std.math.round(plug.sample_rate * 60.0 / plug.tempo / 4.0));
+            const length_a = @floatToInt(usize, std.math.round(Params.values.length_a));
+            const length_d = @floatToInt(usize, std.math.round(Params.values.length_d));
 
             while (frame_index < next_event_frame) : (frame_index += 1) {
                 if (!play) {} else {
-                    const saw = util.sawWaveBackwards(on_sample, wavelength_samples);
+                    const saw = util.envAD(on_sample % wavelength_samples, length_a, length_d);
                     const beat = (on_sample / wavelength_samples) % 4;
                     const gain_beat = switch (beat) {
                         0 => @floatCast(f32, Params.values.gain_amplitude_beat_1),

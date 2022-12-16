@@ -21,3 +21,12 @@ pub inline fn sawWave(on_sample: usize, wavelength: usize) f32 {
 pub inline fn sawWaveBackwards(on_sample: usize, wavelength: usize) f32 {
     return @intToFloat(f32, (wavelength - 1) - (on_sample % wavelength)) / @intToFloat(f32, wavelength - 1);
 }
+
+pub inline fn envAD(on_sample: usize, length_a: usize, length_d: usize) f32 {
+    if (on_sample < length_a) {
+        return sawWave(on_sample, length_a);
+    } else if (on_sample < (length_a + length_d)) {
+        return sawWaveBackwards(on_sample - length_a, length_d);
+    }
+    return 0.0;
+}
