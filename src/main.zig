@@ -137,9 +137,40 @@ pub const Params = struct {
     }
     fn text_to_value(plugin: [*c]const c.clap_plugin_t, id: c.clap_id, display: [*c]const u8, out: [*c]f64) callconv(.C) bool {
         _ = plugin;
-        _ = id;
-        _ = display;
-        _ = out;
+        switch (value_metas[id].t) {
+            .Bool => {
+                const str: []const u8 = std.mem.span(display);
+                out.* = if (std.mem.eql(u8, str, "true")) 1.0 else 0.0;
+            },
+            .VolumeAmp => {
+                const str: []const u8 = blk: {
+                    var str: []const u8 = std.mem.span(display);
+                    str.len = for (str) |char, char_index| {
+                        if (char == ' ') {
+                            break char_index;
+                        }
+                    } else new_len: {
+                        break :new_len str.len;
+                    };
+                    break :blk str;
+                };
+                out.* = util.dBToAmplitude(std.fmt.parseFloat(f32, str) catch @panic("parse float"));
+            },
+            else => {
+                const str: []const u8 = blk: {
+                    var str: []const u8 = std.mem.span(display);
+                    str.len = for (str) |char, char_index| {
+                        if (char == ' ') {
+                            break char_index;
+                        }
+                    } else new_len: {
+                        break :new_len str.len;
+                    };
+                    break :blk str;
+                };
+                out.* = std.fmt.parseFloat(f32, str) catch @panic("parse float");
+            },
+        }
         return true;
     }
     fn flush(plugin: [*c]const c.clap_plugin_t, in: [*c]const c.clap_input_events_t, out: [*c]const c.clap_output_events_t) callconv(.C) void {
