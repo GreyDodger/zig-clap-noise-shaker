@@ -402,11 +402,18 @@ pub const MyPlugin = struct {
         0.0,
     };
     var on_sample: usize = 0;
+    var play: bool = false;
 
     fn do_process(plugin: [*c]const c.clap_plugin_t, process: [*c]const c.clap_process_t) callconv(.C) c.clap_process_status {
         var plug = c_cast(*MyPlugin, plugin.*.plugin_data);
 
         plug.tempo = process.*.transport.*.tempo;
+        const currently_playing = (process.*.transport.*.flags & c.CLAP_TRANSPORT_IS_PLAYING) != 0;
+        if (!play and currently_playing) {
+            const pos_seconds = @intToFloat(f64, process.*.transport.*.song_pos_seconds) / @intToFloat(f64, @as(i64, 1 << 31));
+            on_sample = @floatToInt(usize, std.math.round(pos_seconds * plug.sample_rate));
+        }
+        play = currently_playing;
 
         const num_frames = process.*.frames_count;
         const num_events = process.*.in_events.*.size.?(process.*.in_events);
@@ -436,26 +443,28 @@ pub const MyPlugin = struct {
             const wavelength_samples = @floatToInt(usize, std.math.round(plug.sample_rate * 60.0 / plug.tempo / 4.0));
 
             while (frame_index < next_event_frame) : (frame_index += 1) {
-                const saw = util.sawWaveBackwards(on_sample, wavelength_samples);
-                const beat = (on_sample / wavelength_samples) % 4;
-                const gain_beat = switch (beat) {
-                    0 => @floatCast(f32, Params.values.gain_amplitude_beat_1),
-                    1 => @floatCast(f32, Params.values.gain_amplitude_beat_2),
-                    2 => @floatCast(f32, Params.values.gain_amplitude_beat_3),
-                    3 => @floatCast(f32, Params.values.gain_amplitude_beat_4),
-                    else => unreachable,
-                };
+                if (!play) {} else {
+                    const saw = util.sawWaveBackwards(on_sample, wavelength_samples);
+                    const beat = (on_sample / wavelength_samples) % 4;
+                    const gain_beat = switch (beat) {
+                        0 => @floatCast(f32, Params.values.gain_amplitude_beat_1),
+                        1 => @floatCast(f32, Params.values.gain_amplitude_beat_2),
+                        2 => @floatCast(f32, Params.values.gain_amplitude_beat_3),
+                        3 => @floatCast(f32, Params.values.gain_amplitude_beat_4),
+                        else => unreachable,
+                    };
 
-                const out = [2]f32{
-                    util.randAmplitudeValue() * gain_main * gain_beat * saw,
-                    util.randAmplitudeValue() * gain_main * gain_beat * saw,
-                };
+                    const out = [2]f32{
+                        util.randAmplitudeValue() * gain_main * gain_beat * saw,
+                        util.randAmplitudeValue() * gain_main * gain_beat * saw,
+                    };
 
-                process.*.audio_outputs[0].data32[0][frame_index] = out[0];
-                process.*.audio_outputs[0].data32[1][frame_index] = out[1];
+                    process.*.audio_outputs[0].data32[0][frame_index] = out[0];
+                    process.*.audio_outputs[0].data32[1][frame_index] = out[1];
 
-                on_sample += 1;
-                prev_sample = out;
+                    on_sample += 1;
+                    prev_sample = out;
+                }
             }
         }
 
@@ -472,6 +481,7 @@ pub const MyPlugin = struct {
                 c.CLAP_EVENT_TRANSPORT => {
                     const ev = c_cast([*c]const c.clap_event_transport_t, hdr);
                     plug.tempo = ev.*.tempo;
+                    std.log.debug("transport", .{});
                 },
                 c.CLAP_EVENT_MIDI => {
                     const ev = c_cast([*c]const c.clap_event_midi_t, hdr);
