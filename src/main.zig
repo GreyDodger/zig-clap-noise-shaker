@@ -19,7 +19,10 @@ pub const Params = struct {
         stereo: f64 = 1.0,
         gain_amplitude_main: f64 = 0.0,
         length_a: f64 = 0.0,
-        length_d: f64 = 500.0,
+        length_d_beat_1: f64 = 500.0,
+        length_d_beat_2: f64 = 500.0,
+        length_d_beat_3: f64 = 500.0,
+        length_d_beat_4: f64 = 500.0,
         gain_amplitude_beat_1: f64 = 1.0,
         gain_amplitude_beat_2: f64 = 1.0,
         gain_amplitude_beat_3: f64 = 1.0,
@@ -43,6 +46,9 @@ pub const Params = struct {
         .{ .t = .Bool },
         .{},
         .{ .t = .TimeMilliseconds, .min_value = 0.0, .max_value = 100 },
+        .{ .t = .TimeMilliseconds, .min_value = 0.0, .max_value = 500 },
+        .{ .t = .TimeMilliseconds, .min_value = 0.0, .max_value = 500 },
+        .{ .t = .TimeMilliseconds, .min_value = 0.0, .max_value = 500 },
         .{ .t = .TimeMilliseconds, .min_value = 0.0, .max_value = 500 },
         .{},
         .{},
@@ -466,12 +472,21 @@ pub const MyPlugin = struct {
             const gain_main = @floatCast(f32, Params.values.gain_amplitude_main);
             const wavelength_samples = @floatToInt(usize, std.math.round(plug.sample_rate * 60.0 / plug.tempo / 4.0));
             const length_a = @floatToInt(usize, std.math.round((Params.values.length_a / 1000.0) * plug.sample_rate));
-            const length_d = @floatToInt(usize, std.math.round((Params.values.length_d / 1000.0) * plug.sample_rate));
+            const length_d_1 = @floatToInt(usize, std.math.round((Params.values.length_d_beat_1 / 1000.0) * plug.sample_rate));
+            const length_d_2 = @floatToInt(usize, std.math.round((Params.values.length_d_beat_2 / 1000.0) * plug.sample_rate));
+            const length_d_3 = @floatToInt(usize, std.math.round((Params.values.length_d_beat_3 / 1000.0) * plug.sample_rate));
+            const length_d_4 = @floatToInt(usize, std.math.round((Params.values.length_d_beat_4 / 1000.0) * plug.sample_rate));
 
             while (frame_index < next_event_frame) : (frame_index += 1) {
                 if (!play) {} else {
-                    const saw = util.envAD(on_sample % wavelength_samples, length_a, length_d);
                     const beat = (on_sample / wavelength_samples) % 4;
+                    const saw = util.envAD(on_sample % wavelength_samples, length_a, switch (beat) {
+                        0 => length_d_1,
+                        1 => length_d_2,
+                        2 => length_d_3,
+                        3 => length_d_4,
+                        else => unreachable,
+                    });
                     const gain_beat = switch (beat) {
                         0 => @floatCast(f32, Params.values.gain_amplitude_beat_1),
                         1 => @floatCast(f32, Params.values.gain_amplitude_beat_2),
