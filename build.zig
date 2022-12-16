@@ -51,10 +51,10 @@ pub const CreateClapPluginStep = struct {
     fn make(step: *Step) !void {
         const self = @fieldParentPtr(Self, "step", step);
         if (self.artifact.target.isWindows()) {
-            var dir = std.fs.cwd();
+            var dir = try std.fs.openDirAbsolute(self.builder.build_root, .{});
             _ = try dir.updateFile("zig-out/lib/clap-shaker.dll", dir, "zig-out/lib/clap-shaker.dll.clap", .{});
         } else if (self.artifact.target.isDarwin()) {
-            var dir = std.fs.cwd();
+            var dir = try std.fs.openDirAbsolute(self.builder.build_root, .{});
             _ = try dir.updateFile("zig-out/lib/libclap-shaker.dylib", dir, "zig-out/lib/Noise Shaker.clap/Contents/MacOS/Noise Shaker", .{});
             _ = try dir.updateFile("macos/info.plist", dir, "zig-out/lib/Noise Shaker.clap/Contents/info.plist", .{});
             _ = try dir.updateFile("macos/PkgInfo", dir, "zig-out/lib/Noise Shaker.clap/Contents/PkgInfo", .{});
