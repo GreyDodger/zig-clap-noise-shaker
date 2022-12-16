@@ -19,7 +19,7 @@ pub const Params = struct {
         stereo: f64 = 1.0,
         gain_amplitude_main: f64 = 0.0,
         length_a: f64 = 0.0,
-        length_d: f64 = 1000.0,
+        length_d: f64 = 500.0,
         gain_amplitude_beat_1: f64 = 1.0,
         gain_amplitude_beat_2: f64 = 1.0,
         gain_amplitude_beat_3: f64 = 1.0,
@@ -35,14 +35,15 @@ pub const Params = struct {
         VolumeAmp,
         VolumeDB,
         TimeSamples,
+        TimeMilliseconds,
     };
 
     pub var values = Values{};
     var value_metas = [std.meta.fields(Values).len]ValueMeta{
         .{ .t = .Bool },
         .{},
-        .{ .t = .TimeSamples, .min_value = 0.0, .max_value = 1000.0 },
-        .{ .t = .TimeSamples, .min_value = 0.0, .max_value = 1000.0 },
+        .{ .t = .TimeMilliseconds, .min_value = 0.0, .max_value = 100 },
+        .{ .t = .TimeMilliseconds, .min_value = 0.0, .max_value = 500 },
         .{},
         .{},
         .{},
@@ -99,6 +100,9 @@ pub const Params = struct {
             .VolumeAmp => {
                 const display = util.amplitudeTodB(@floatCast(f32, value));
                 _ = std.fmt.bufPrintZ(buf, "{d:.4} dB", .{display}) catch unreachable;
+            },
+            .TimeMilliseconds => {
+                _ = std.fmt.bufPrintZ(buf, "{d:.4} ms", .{value}) catch unreachable;
             },
             else => {
                 _ = std.fmt.bufPrintZ(buf, "{d:.4}", .{value}) catch unreachable;
@@ -461,8 +465,8 @@ pub const MyPlugin = struct {
 
             const gain_main = @floatCast(f32, Params.values.gain_amplitude_main);
             const wavelength_samples = @floatToInt(usize, std.math.round(plug.sample_rate * 60.0 / plug.tempo / 4.0));
-            const length_a = @floatToInt(usize, std.math.round(Params.values.length_a));
-            const length_d = @floatToInt(usize, std.math.round(Params.values.length_d));
+            const length_a = @floatToInt(usize, std.math.round((Params.values.length_a / 1000.0) * plug.sample_rate));
+            const length_d = @floatToInt(usize, std.math.round((Params.values.length_d / 1000.0) * plug.sample_rate));
 
             while (frame_index < next_event_frame) : (frame_index += 1) {
                 if (!play) {} else {
