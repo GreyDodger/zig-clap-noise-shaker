@@ -11,7 +11,11 @@ const global = @import("global.zig");
 
 pub const Params = struct {
     const Values = struct {
-        gain_amplitude: f64 = 0.0,
+        gain_amplitude_main: f64 = 0.0,
+        gain_amplitude_beat_1: f64 = 1.0,
+        gain_amplitude_beat_2: f64 = 1.0,
+        gain_amplitude_beat_3: f64 = 1.0,
+        gain_amplitude_beat_4: f64 = 1.0,
     };
     const ValueMeta = struct {
         min_value: f64,
@@ -20,6 +24,10 @@ pub const Params = struct {
 
     pub var values = Values{};
     var value_metas = [std.meta.fields(Values).len]ValueMeta{
+        .{ .min_value = 0.0, .max_value = 1.0 },
+        .{ .min_value = 0.0, .max_value = 1.0 },
+        .{ .min_value = 0.0, .max_value = 1.0 },
+        .{ .min_value = 0.0, .max_value = 1.0 },
         .{ .min_value = 0.0, .max_value = 1.0 },
     };
 
@@ -414,13 +422,23 @@ pub const MyPlugin = struct {
                 }
             }
 
-            var param_gain_amp = @floatCast(f32, Params.values.gain_amplitude);
+            const gain_main = @floatCast(f32, Params.values.gain_amplitude_main);
 
             while (frame_index < next_event_frame) : (frame_index += 1) {
-                var saw = util.sawWaveBackwards(on_sample, 44100 / 4);
+                const saw = util.sawWaveBackwards(on_sample, 44100 / 4);
+
+                const beat = (on_sample / (44100 / 4)) % 4;
+                const gain_beat = switch (beat) {
+                    0 => @floatCast(f32, Params.values.gain_amplitude_beat_1),
+                    1 => @floatCast(f32, Params.values.gain_amplitude_beat_2),
+                    2 => @floatCast(f32, Params.values.gain_amplitude_beat_3),
+                    3 => @floatCast(f32, Params.values.gain_amplitude_beat_4),
+                    else => unreachable,
+                };
+
                 const out = [2]f32{
-                    util.randAmplitudeValue() * param_gain_amp * saw,
-                    util.randAmplitudeValue() * param_gain_amp * saw,
+                    util.randAmplitudeValue() * gain_main * gain_beat * saw,
+                    util.randAmplitudeValue() * gain_main * gain_beat * saw,
                 };
 
                 process.*.audio_outputs[0].data32[0][frame_index] = out[0];
