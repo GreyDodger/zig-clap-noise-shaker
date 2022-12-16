@@ -259,6 +259,7 @@ const State = struct {
 pub const MyPlugin = struct {
     plugin: c.clap_plugin_t,
     latency: u32,
+    sample_rate: f64,
     host: [*c]const c.clap_host_t,
     hostParams: [*c]const c.clap_host_params_t,
     hostLog: ?*const c.clap_host_log_t,
@@ -319,8 +320,8 @@ pub const MyPlugin = struct {
     }
 
     fn activate(plugin: [*c]const c.clap_plugin_t, sample_rate: f64, min_frames_count: u32, max_frames_count: u32) callconv(.C) bool {
-        _ = plugin;
-        _ = sample_rate;
+        var plug = c_cast(*MyPlugin, plugin.*.plugin_data);
+        plug.sample_rate = sample_rate;
         _ = min_frames_count;
         _ = max_frames_count;
         return true;
@@ -384,6 +385,7 @@ pub const MyPlugin = struct {
             .hostLog = null,
             .hostThreadCheck = null,
             .latency = 0,
+            .sample_rate = 44100,
         };
         // Don't call into the host here
         return &p.plugin;
@@ -424,10 +426,12 @@ pub const MyPlugin = struct {
 
             const gain_main = @floatCast(f32, Params.values.gain_amplitude_main);
 
-            while (frame_index < next_event_frame) : (frame_index += 1) {
-                const saw = util.sawWaveBackwards(on_sample, 44100 / 4);
+            const sample_rate = @floatToInt(usize, plug.sample_rate);
 
-                const beat = (on_sample / (44100 / 4)) % 4;
+            while (frame_index < next_event_frame) : (frame_index += 1) {
+                const saw = util.sawWaveBackwards(on_sample, sample_rate / 4);
+
+                const beat = (on_sample / (sample_rate / 4)) % 4;
                 const gain_beat = switch (beat) {
                     0 => @floatCast(f32, Params.values.gain_amplitude_beat_1),
                     1 => @floatCast(f32, Params.values.gain_amplitude_beat_2),
