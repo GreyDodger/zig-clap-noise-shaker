@@ -595,6 +595,7 @@ pub const MyPlugin = struct {
                         else => {},
                     }
                 },
+                else => {},
             }
         }
     }
