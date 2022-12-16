@@ -79,6 +79,8 @@ pub const Params = struct {
         switch (index) {
             inline 0...(fields.len - 1) => |comptime_index| {
                 const field = fields[comptime_index];
+                var flags: u32 = if (value_metas[index].t == .Bool) c.CLAP_PARAM_IS_STEPPED else 0;
+                flags |= c.CLAP_PARAM_IS_AUTOMATABLE;
                 info.* = .{
                     .id = index,
                     .name = undefined,
@@ -86,7 +88,7 @@ pub const Params = struct {
                     .min_value = value_metas[index].min_value,
                     .max_value = value_metas[index].max_value,
                     .default_value = @ptrCast(*const f64, @alignCast(@alignOf(field.field_type), field.default_value.?)).*,
-                    .flags = if (value_metas[index].t == .Bool) c.CLAP_PARAM_IS_STEPPED else 0,
+                    .flags = flags,
                     .cookie = null,
                 };
                 if (value_metas[index].name.len > 0) {
@@ -141,9 +143,13 @@ pub const Params = struct {
         return true;
     }
     fn flush(plugin: [*c]const c.clap_plugin_t, in: [*c]const c.clap_input_events_t, out: [*c]const c.clap_output_events_t) callconv(.C) void {
-        _ = plugin;
-        _ = in;
-        _ = out;
+        var plug = c_cast(*MyPlugin, plugin.*.plugin_data);
+        var event_index: u32 = 0;
+        const num_events = in.*.size.?(in);
+        while (event_index < num_events) : (event_index += 1) {
+            const event_header = in.*.get.?(in, event_index);
+            plug.do_process_event(event_header, out);
+        }
     }
 
     const Data = c.clap_plugin_params_t{
@@ -374,7 +380,6 @@ pub const MyPlugin = struct {
     fn activate(plugin: [*c]const c.clap_plugin_t, sample_rate: f64, min_frames_count: u32, max_frames_count: u32) callconv(.C) bool {
         var plug = c_cast(*MyPlugin, plugin.*.plugin_data);
         plug.sample_rate = sample_rate;
-        std.log.debug("activate {d:.2}", .{sample_rate});
         _ = min_frames_count;
         _ = max_frames_count;
         return true;
@@ -565,7 +570,6 @@ pub const MyPlugin = struct {
                 c.CLAP_EVENT_TRANSPORT => {
                     const ev = c_cast([*c]const c.clap_event_transport_t, hdr);
                     plug.tempo = ev.*.tempo;
-                    std.log.debug("transport", .{});
                 },
                 c.CLAP_EVENT_MIDI => {
                     const ev = c_cast([*c]const c.clap_event_midi_t, hdr);
@@ -591,12 +595,7 @@ pub const MyPlugin = struct {
                         else => {},
                     }
                 },
-                else => |t| {
-                    std.log.debug("event type {}", .{t});
-                },
             }
-        } else {
-            std.log.debug("non core event space", .{});
         }
     }
 };
