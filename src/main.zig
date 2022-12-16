@@ -16,6 +16,7 @@ const global = @import("global.zig");
 
 pub const Params = struct {
     const Values = struct {
+        stereo: f64 = 1.0,
         gain_amplitude_main: f64 = 0.0,
         length_a: f64 = 0.0,
         length_d: f64 = 1000.0,
@@ -25,19 +26,27 @@ pub const Params = struct {
         gain_amplitude_beat_4: f64 = 1.0,
     };
     const ValueMeta = struct {
-        min_value: f64,
-        max_value: f64,
+        t: ValueType = .VolumeAmp,
+        min_value: f64 = 0.0,
+        max_value: f64 = 1.0,
+    };
+    const ValueType = enum {
+        Bool,
+        VolumeAmp,
+        VolumeDB,
+        TimeSamples,
     };
 
     pub var values = Values{};
     var value_metas = [std.meta.fields(Values).len]ValueMeta{
-        .{ .min_value = 0.0, .max_value = 1.0 },
-        .{ .min_value = 0.0, .max_value = 1000.0 },
-        .{ .min_value = 0.0, .max_value = 1000.0 },
-        .{ .min_value = 0.0, .max_value = 1.0 },
-        .{ .min_value = 0.0, .max_value = 1.0 },
-        .{ .min_value = 0.0, .max_value = 1.0 },
-        .{ .min_value = 0.0, .max_value = 1.0 },
+        .{ .t = .Bool },
+        .{},
+        .{ .t = .TimeSamples, .min_value = 0.0, .max_value = 1000.0 },
+        .{ .t = .TimeSamples, .min_value = 0.0, .max_value = 1000.0 },
+        .{},
+        .{},
+        .{},
+        .{},
     };
 
     fn count(plugin: [*c]const c.clap_plugin_t) callconv(.C) u32 {
@@ -58,7 +67,7 @@ pub const Params = struct {
                     .min_value = value_metas[index].min_value,
                     .max_value = value_metas[index].max_value,
                     .default_value = @ptrCast(*const f64, @alignCast(@alignOf(field.field_type), field.default_value.?)).*,
-                    .flags = 0,
+                    .flags = if (value_metas[index].t == .Bool) c.CLAP_PARAM_IS_STEPPED else 0,
                     .cookie = null,
                 };
                 _ = std.fmt.bufPrintZ(&info.*.name, field.name, .{}) catch unreachable;
@@ -83,12 +92,19 @@ pub const Params = struct {
         _ = plugin;
         var buf: []u8 = buf_ptr[0..buf_size];
 
-        if (id == 0) {
-            const display = util.amplitudeTodB(@floatCast(f32, value));
-            _ = std.fmt.bufPrintZ(buf, "{d:.4} dB", .{display}) catch unreachable;
-        } else {
-            _ = std.fmt.bufPrintZ(buf, "{d:.4}", .{value}) catch unreachable;
+        switch (value_metas[id].t) {
+            .Bool => {
+                _ = std.fmt.bufPrintZ(buf, "{s}", .{if (value == 0.0) "false" else "true"}) catch unreachable;
+            },
+            .VolumeAmp => {
+                const display = util.amplitudeTodB(@floatCast(f32, value));
+                _ = std.fmt.bufPrintZ(buf, "{d:.4} dB", .{display}) catch unreachable;
+            },
+            else => {
+                _ = std.fmt.bufPrintZ(buf, "{d:.4}", .{value}) catch unreachable;
+            },
         }
+
         return true;
     }
     fn text_to_value(plugin: [*c]const c.clap_plugin_t, id: c.clap_id, display: [*c]const u8, out: [*c]f64) callconv(.C) bool {
@@ -460,9 +476,12 @@ pub const MyPlugin = struct {
                         else => unreachable,
                     };
 
+                    const out_0 = util.randAmplitudeValue() * gain_main * gain_beat * saw;
+                    const out_1 = if (Params.values.stereo == 0.0) out_0 else util.randAmplitudeValue() * gain_main * gain_beat * saw;
+
                     const out = [2]f32{
-                        util.randAmplitudeValue() * gain_main * gain_beat * saw,
-                        util.randAmplitudeValue() * gain_main * gain_beat * saw,
+                        out_0,
+                        out_1,
                     };
 
                     process.*.audio_outputs[0].data32[0][frame_index] = out[0];
