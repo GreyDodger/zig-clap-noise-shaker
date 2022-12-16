@@ -669,7 +669,7 @@ const Entry = struct {
 
         // this is my current best idea on how to read logging
         // reaper has hostLog extension, but I don't know how that works
-        if (builtin.os.tag == .windows) {
+        if (builtin.mode == .Debug and builtin.os.tag == .windows) {
             c.redirectStdOutToConsoleWindow();
         }
 
