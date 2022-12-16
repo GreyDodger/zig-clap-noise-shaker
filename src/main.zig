@@ -264,7 +264,8 @@ const State = struct {
 pub const MyPlugin = struct {
     plugin: c.clap_plugin_t,
     latency: u32,
-    sample_rate: f64,
+    sample_rate: f64 = 44100, // will be overwritten, just don't want this to ever be 0
+    tempo: f64 = 120, // (bpm) will be overwritten, just don't want this to ever be 0
     host: [*c]const c.clap_host_t,
     hostParams: [*c]const c.clap_host_params_t,
     hostLog: ?*const c.clap_host_log_t,
@@ -391,7 +392,6 @@ pub const MyPlugin = struct {
             .hostLog = null,
             .hostThreadCheck = null,
             .latency = 0,
-            .sample_rate = 44100,
         };
         // Don't call into the host here
         return &p.plugin;
@@ -405,6 +405,8 @@ pub const MyPlugin = struct {
 
     fn do_process(plugin: [*c]const c.clap_plugin_t, process: [*c]const c.clap_process_t) callconv(.C) c.clap_process_status {
         var plug = c_cast(*MyPlugin, plugin.*.plugin_data);
+
+        plug.tempo = process.*.transport.*.tempo;
 
         const num_frames = process.*.frames_count;
         const num_events = process.*.in_events.*.size.?(process.*.in_events);
@@ -431,13 +433,11 @@ pub const MyPlugin = struct {
             }
 
             const gain_main = @floatCast(f32, Params.values.gain_amplitude_main);
-
-            const sample_rate = @floatToInt(usize, plug.sample_rate);
+            const wavelength_samples = @floatToInt(usize, std.math.round(plug.sample_rate * 60.0 / plug.tempo / 4.0));
 
             while (frame_index < next_event_frame) : (frame_index += 1) {
-                const saw = util.sawWaveBackwards(on_sample, sample_rate / 4);
-
-                const beat = (on_sample / (sample_rate / 4)) % 4;
+                const saw = util.sawWaveBackwards(on_sample, wavelength_samples);
+                const beat = (on_sample / wavelength_samples) % 4;
                 const gain_beat = switch (beat) {
                     0 => @floatCast(f32, Params.values.gain_amplitude_beat_1),
                     1 => @floatCast(f32, Params.values.gain_amplitude_beat_2),
@@ -462,13 +462,16 @@ pub const MyPlugin = struct {
         return c.CLAP_PROCESS_SLEEP;
     }
 
-    fn do_process_event(plug: *const MyPlugin, hdr: [*c]const c.clap_event_header_t, out_events: *const c.clap_output_events_t) void {
-        _ = plug;
+    fn do_process_event(plug: *MyPlugin, hdr: [*c]const c.clap_event_header_t, out_events: *const c.clap_output_events_t) void {
         if (hdr.*.space_id == c.CLAP_CORE_EVENT_SPACE_ID) {
             switch (hdr.*.type) {
                 c.CLAP_EVENT_PARAM_VALUE => {
                     const ev = c_cast([*c]const c.clap_event_param_value_t, hdr);
                     Params.setValue(ev.*.param_id, ev.*.value);
+                },
+                c.CLAP_EVENT_TRANSPORT => {
+                    const ev = c_cast([*c]const c.clap_event_transport_t, hdr);
+                    plug.tempo = ev.*.tempo;
                 },
                 c.CLAP_EVENT_MIDI => {
                     const ev = c_cast([*c]const c.clap_event_midi_t, hdr);
@@ -486,8 +489,12 @@ pub const MyPlugin = struct {
                         else => {},
                     }
                 },
-                else => {},
+                else => |t| {
+                    std.log.debug("event type {}", .{t});
+                },
             }
+        } else {
+            std.log.debug("non core event space", .{});
         }
     }
 };
