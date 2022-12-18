@@ -256,6 +256,9 @@ pub const Params = struct {
                     @field(values, fields[meta_index].name) = try read(stream, f64);
                     break;
                 }
+            } else {
+                // discard value
+                _ = try read(stream, f64);
             }
         }
     }
