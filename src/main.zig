@@ -222,7 +222,9 @@ pub const Params = struct {
             else => {},
         }
     }
-    pub fn setValueTellHost(param_id: u32, value: f64, time: u32, out_events: *const c.clap_output_events_t) void {
+    pub fn setValueTellHost(comptime field_name: []const u8, value: f64, time: u32, out_events: *const c.clap_output_events_t) void {
+        const param_id = @intCast(u32, std.meta.fieldIndex(Params.Values, field_name).?);
+
         setValue(param_id, value);
 
         var e = c.clap_event_param_value_t{
@@ -619,8 +621,8 @@ pub const MyPlugin = struct {
                         },
                         176 => { // CC
                             if (ev.*.data[1] == 1) {
-                                const db_value = util.amplitudeTodB(@intToFloat(f32, ev.*.data[2]) / 127.0);
-                                Params.setValueTellHost(0, db_value, hdr.*.time, out_events);
+                                const value = @intToFloat(f32, ev.*.data[2]) / 127.0;
+                                Params.setValueTellHost("gain_amplitude_main", value, hdr.*.time, out_events);
                             }
                         },
                         else => {},
