@@ -46,7 +46,7 @@ pub const Params = struct {
     };
 
     pub var values = Values{};
-    var value_metas = [std.meta.fields(Values).len]ValueMeta{
+    const value_metas = [std.meta.fields(Values).len]ValueMeta{
         .{ .id = 0x5da004c1, .name = "Stereo", .t = .Bool },
         .{ .id = 0xe100e598, .name = "Volume" },
         .{ .id = 0xa898f74a, .name = "Shaker Env: Attack", .t = .TimeMilliseconds, .min_value = 0.0, .max_value = 100 },
@@ -60,6 +60,18 @@ pub const Params = struct {
         .{ .id = 0x3cf7df5f, .name = "% Volume Beat 4" },
         .{ .id = 0xe1d8f811, .name = "Swing", .t = .TVal },
     };
+
+    comptime {
+        var i: usize = 0;
+        while (i < value_metas.len) : (i += 1) {
+            var j = i + 1;
+            while (j < value_metas.len) : (j += 1) {
+                if (value_metas[i].id == value_metas[j].id) {
+                    @compileLog("Repeating IDs ", i, j);
+                }
+            }
+        }
+    }
 
     fn idToValueIndex(id: u32) !usize {
         const fields = std.meta.fields(Values);
