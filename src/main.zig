@@ -238,7 +238,6 @@ pub const Params = struct {
         return result;
     }
     fn writeAll(stream: *const c.clap_ostream_t) !void {
-        std.log.debug("write all", .{});
         const fields = std.meta.fields(Values);
         try write(stream, fields.len);
         inline for (fields) |field, field_index| {
@@ -247,7 +246,6 @@ pub const Params = struct {
         }
     }
     fn readAll(stream: *const c.clap_istream_t) !void {
-        std.log.debug("read all", .{});
         const fields = std.meta.fields(Values);
         const num_values = try read(stream, usize);
         var i: usize = 0;
