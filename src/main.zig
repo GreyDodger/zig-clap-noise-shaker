@@ -30,6 +30,7 @@ pub const Params = struct {
         swing: f64 = 0.0,
     };
     const ValueMeta = struct {
+        id: u32,
         name: []const u8 = &[_]u8{},
         t: ValueType = .VolumeAmp,
         min_value: f64 = 0.0,
@@ -46,27 +47,47 @@ pub const Params = struct {
 
     pub var values = Values{};
     var value_metas = [std.meta.fields(Values).len]ValueMeta{
-        .{ .name = "Stereo", .t = .Bool },
-        .{ .name = "Volume" },
-        .{ .name = "Shaker Env: Attack", .t = .TimeMilliseconds, .min_value = 0.0, .max_value = 100 },
-        .{ .name = "Shaker Env: Delay (beat 1)", .t = .TimeMilliseconds, .min_value = 0.0, .max_value = 500 },
-        .{ .name = "Shaker Env: Delay (beat 2)", .t = .TimeMilliseconds, .min_value = 0.0, .max_value = 500 },
-        .{ .name = "Shaker Env: Delay (beat 3)", .t = .TimeMilliseconds, .min_value = 0.0, .max_value = 500 },
-        .{ .name = "Shaker Env: Delay (beat 4)", .t = .TimeMilliseconds, .min_value = 0.0, .max_value = 500 },
-        .{
-            .name = "% Volume Beat 1",
-        },
-        .{
-            .name = "% Volume Beat 2",
-        },
-        .{
-            .name = "% Volume Beat 3",
-        },
-        .{
-            .name = "% Volume Beat 4",
-        },
-        .{ .name = "Swing", .t = .TVal },
+        .{ .id = 0x5da004c1, .name = "Stereo", .t = .Bool },
+        .{ .id = 0xe100e598, .name = "Volume" },
+        .{ .id = 0xa898f74a, .name = "Shaker Env: Attack", .t = .TimeMilliseconds, .min_value = 0.0, .max_value = 100 },
+        .{ .id = 0x52a6f72d, .name = "Shaker Env: Delay (beat 1)", .t = .TimeMilliseconds, .min_value = 0.0, .max_value = 500 },
+        .{ .id = 0x546487f1, .name = "Shaker Env: Delay (beat 2)", .t = .TimeMilliseconds, .min_value = 0.0, .max_value = 500 },
+        .{ .id = 0x9ff538eb, .name = "Shaker Env: Delay (beat 3)", .t = .TimeMilliseconds, .min_value = 0.0, .max_value = 500 },
+        .{ .id = 0x6f11886a, .name = "Shaker Env: Delay (beat 4)", .t = .TimeMilliseconds, .min_value = 0.0, .max_value = 500 },
+        .{ .id = 0x5935e90a, .name = "% Volume Beat 1" },
+        .{ .id = 0x3c2799cb, .name = "% Volume Beat 2" },
+        .{ .id = 0x154b3694, .name = "% Volume Beat 3" },
+        .{ .id = 0x3cf7df5f, .name = "% Volume Beat 4" },
+        .{ .id = 0xe1d8f811, .name = "Swing", .t = .TVal },
     };
+
+    fn idToValueIndex(id: u32) !usize {
+        const fields = std.meta.fields(Values);
+        inline for (fields) |_, field_index| {
+            if (value_metas[field_index].id == id) {
+                return field_index;
+            }
+        }
+        return error.CantFindValue;
+    }
+    fn idToValue(id: u32) !f64 {
+        const fields = std.meta.fields(Values);
+        inline for (fields) |field, field_index| {
+            if (value_metas[field_index].id == id) {
+                return @field(values, field.name);
+            }
+        }
+        return error.CantFindValue;
+    }
+    fn idToValuePtr(id: u32) !*f64 {
+        const fields = std.meta.fields(Values);
+        inline for (fields) |field, field_index| {
+            if (value_metas[field_index].id == id) {
+                return &@field(values, field.name);
+            }
+        }
+        return error.CantFindValue;
+    }
 
     fn count(plugin: [*c]const c.clap_plugin_t) callconv(.C) u32 {
         _ = plugin;
@@ -82,7 +103,7 @@ pub const Params = struct {
                 var flags: u32 = if (value_metas[index].t == .Bool) c.CLAP_PARAM_IS_STEPPED else 0;
                 flags |= c.CLAP_PARAM_IS_AUTOMATABLE;
                 info.* = .{
-                    .id = index,
+                    .id = value_metas[index].id,
                     .name = undefined,
                     .module = undefined,
                     .min_value = value_metas[index].min_value,
@@ -104,20 +125,18 @@ pub const Params = struct {
     }
     fn get_value(plugin: [*c]const c.clap_plugin_t, id: c.clap_id, out: [*c]f64) callconv(.C) bool {
         _ = plugin;
-        const fields = std.meta.fields(Values);
-        switch (id) {
-            inline 0...(fields.len - 1) => |comptime_index| {
-                out.* = @field(values, fields[comptime_index].name);
-            },
-            else => {},
-        }
+        out.* = idToValue(id) catch {
+            return false;
+        };
         return true;
     }
     fn value_to_text(plugin: [*c]const c.clap_plugin_t, id: c.clap_id, value: f64, buf_ptr: [*c]u8, buf_size: u32) callconv(.C) bool {
         _ = plugin;
         var buf: []u8 = buf_ptr[0..buf_size];
-
-        switch (value_metas[id].t) {
+        var index = idToValueIndex(id) catch {
+            return false;
+        };
+        switch (value_metas[index].t) {
             .Bool => {
                 _ = std.fmt.bufPrintZ(buf, "{s}", .{if (value == 0.0) "false" else "true"}) catch unreachable;
             },
@@ -132,12 +151,14 @@ pub const Params = struct {
                 _ = std.fmt.bufPrintZ(buf, "{d:.4}", .{value}) catch unreachable;
             },
         }
-
         return true;
     }
     fn text_to_value(plugin: [*c]const c.clap_plugin_t, id: c.clap_id, display: [*c]const u8, out: [*c]f64) callconv(.C) bool {
         _ = plugin;
-        switch (value_metas[id].t) {
+        var index = idToValueIndex(id) catch {
+            return false;
+        };
+        switch (value_metas[index].t) {
             .Bool => {
                 const str: []const u8 = std.mem.span(display);
                 out.* = if (std.mem.eql(u8, str, "true")) 1.0 else 0.0;
@@ -192,38 +213,50 @@ pub const Params = struct {
         .flush = flush,
     };
 
-    fn writeAll(stream: *const c.clap_ostream_t) bool {
-        inline for (std.meta.fields(Values)) |field| {
-            const value = @field(values, field.name);
-            const num_bytes = @sizeOf(@TypeOf(value));
-            if (stream.*.write.?(stream, &value, num_bytes) != num_bytes) {
-                return false;
-            }
+    fn write(stream: *const c.clap_ostream_t, value: anytype) !void {
+        if (stream.*.write.?(stream, &value, @sizeOf(@TypeOf(value))) != @sizeOf(@TypeOf(value))) {
+            return error.WriteError;
         }
-        return true;
     }
-    fn readAll(stream: *const c.clap_istream_t) bool {
-        inline for (std.meta.fields(Values)) |field| {
-            const value = &@field(values, field.name);
-            const num_bytes = @sizeOf(@TypeOf(value.*));
-            if (stream.*.read.?(stream, value, num_bytes) != num_bytes) {
-                return false;
+    fn read(stream: *const c.clap_istream_t, comptime T: type) !T {
+        var result: T = undefined;
+        if (stream.*.read.?(stream, &result, @sizeOf(T)) != @sizeOf(T)) {
+            return error.ReadError;
+        }
+        return result;
+    }
+    fn writeAll(stream: *const c.clap_ostream_t) !void {
+        std.log.debug("write all", .{});
+        const fields = std.meta.fields(Values);
+        try write(stream, fields.len);
+        inline for (fields) |field, field_index| {
+            try write(stream, Params.value_metas[field_index].id);
+            try write(stream, @field(values, field.name));
+        }
+    }
+    fn readAll(stream: *const c.clap_istream_t) !void {
+        std.log.debug("read all", .{});
+        const fields = std.meta.fields(Values);
+        const num_values = try read(stream, usize);
+        var i: usize = 0;
+        while (i < num_values) : (i += 1) {
+            const id = try read(stream, u32);
+            inline for (value_metas) |meta, meta_index| {
+                if (id == meta.id) {
+                    @field(values, fields[meta_index].name) = try read(stream, f64);
+                    break;
+                }
             }
         }
-        return true;
     }
 
     pub fn setValue(param_id: u32, value: f64) void {
-        const fields = std.meta.fields(Values);
-        switch (param_id) {
-            inline 0...(fields.len - 1) => |comptime_index| {
-                @field(values, fields[comptime_index].name) = value;
-            },
-            else => {},
-        }
+        (idToValuePtr(param_id) catch {
+            return;
+        }).* = value;
     }
     pub fn setValueTellHost(comptime field_name: []const u8, value: f64, time: u32, out_events: *const c.clap_output_events_t) void {
-        const param_id = @intCast(u32, std.meta.fieldIndex(Params.Values, field_name).?);
+        const param_id = Params.value_metas[@intCast(u32, std.meta.fieldIndex(Params.Values, field_name).?)].id;
 
         setValue(param_id, value);
 
@@ -330,14 +363,18 @@ const Latency = struct {
 const State = struct {
     fn save(plugin: [*c]const c.clap_plugin_t, stream: [*c]const c.clap_ostream_t) callconv(.C) bool {
         _ = plugin;
-        var success = Params.writeAll(stream);
-        return success;
+        Params.writeAll(stream) catch {
+            return false;
+        };
+        return true;
     }
 
     fn load(plugin: [*c]const c.clap_plugin_t, stream: [*c]const c.clap_istream_t) callconv(.C) bool {
         _ = plugin;
-        var success = Params.readAll(stream);
-        return success;
+        Params.readAll(stream) catch {
+            return false;
+        };
+        return true;
     }
 
     const Data = c.clap_plugin_state_t{
