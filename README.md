@@ -2,6 +2,10 @@
 * An audio plugin using the CLAP audio standard https://github.com/free-audio/clap
 * Works on Windows/MacOS
 
+![image](https://user-images.githubusercontent.com/2457708/208302646-983719ee-6ebd-44a0-9cd0-630b9ec45ba9.png)
+## Guide
+Activate by holding any midi note
+
 Example:
 https://user-images.githubusercontent.com/2457708/208301440-6a721d90-b1c1-465c-9853-0548227c3352.mp4
 
