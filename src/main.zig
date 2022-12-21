@@ -29,6 +29,9 @@ pub const Params = struct {
         gain_amplitude_beat_4: f64 = 0.4,
         swing: f64 = 0.0,
     };
+
+    values: Values = Values{},
+
     const ValueMeta = struct {
         id: u32,
         name: []const u8 = &[_]u8{},
@@ -45,7 +48,6 @@ pub const Params = struct {
         TVal,
     };
 
-    pub var values = Values{};
     const value_metas = [std.meta.fields(Values).len]ValueMeta{
         .{ .id = 0x5da004c1, .name = "Stereo", .t = .Bool },
         .{ .id = 0xe100e598, .name = "Volume" },
@@ -82,20 +84,20 @@ pub const Params = struct {
         }
         return error.CantFindValue;
     }
-    fn idToValue(id: u32) !f64 {
+    fn idToValue(self: Params, id: u32) !f64 {
         const fields = std.meta.fields(Values);
         inline for (fields) |field, field_index| {
             if (value_metas[field_index].id == id) {
-                return @field(values, field.name);
+                return @field(self.values, field.name);
             }
         }
         return error.CantFindValue;
     }
-    fn idToValuePtr(id: u32) !*f64 {
+    fn idToValuePtr(self: *Params, id: u32) !*f64 {
         const fields = std.meta.fields(Values);
         inline for (fields) |field, field_index| {
             if (value_metas[field_index].id == id) {
-                return &@field(values, field.name);
+                return &@field(self.values, field.name);
             }
         }
         return error.CantFindValue;
@@ -136,8 +138,8 @@ pub const Params = struct {
         return true;
     }
     fn get_value(plugin: [*c]const c.clap_plugin_t, id: c.clap_id, out: [*c]f64) callconv(.C) bool {
-        _ = plugin;
-        out.* = idToValue(id) catch {
+        var plug = c_cast(*MyPlugin, plugin.*.plugin_data);
+        out.* = plug.params.idToValue(id) catch {
             return false;
         };
         return true;
@@ -237,15 +239,15 @@ pub const Params = struct {
         }
         return result;
     }
-    fn writeAll(stream: *const c.clap_ostream_t) !void {
+    fn writeAll(self: Params, stream: *const c.clap_ostream_t) !void {
         const fields = std.meta.fields(Values);
         try write(stream, fields.len);
         inline for (fields) |field, field_index| {
             try write(stream, Params.value_metas[field_index].id);
-            try write(stream, @field(values, field.name));
+            try write(stream, @field(self.values, field.name));
         }
     }
-    fn readAll(stream: *const c.clap_istream_t) !void {
+    fn readAll(self: *Params, stream: *const c.clap_istream_t) !void {
         const fields = std.meta.fields(Values);
         const num_values = try read(stream, usize);
         var i: usize = 0;
@@ -253,7 +255,7 @@ pub const Params = struct {
             const id = try read(stream, u32);
             inline for (value_metas) |meta, meta_index| {
                 if (id == meta.id) {
-                    @field(values, fields[meta_index].name) = try read(stream, f64);
+                    @field(self.values, fields[meta_index].name) = try read(stream, f64);
                     break;
                 }
             } else {
@@ -263,15 +265,15 @@ pub const Params = struct {
         }
     }
 
-    pub fn setValue(param_id: u32, value: f64) void {
-        (idToValuePtr(param_id) catch {
+    pub fn setValue(self: *Params, param_id: u32, value: f64) void {
+        (self.idToValuePtr(param_id) catch {
             return;
         }).* = value;
     }
-    pub fn setValueTellHost(comptime field_name: []const u8, value: f64, time: u32, out_events: *const c.clap_output_events_t) void {
+    pub fn setValueTellHost(self: *Params, comptime field_name: []const u8, value: f64, time: u32, out_events: *const c.clap_output_events_t) void {
         const param_id = Params.value_metas[@intCast(u32, std.meta.fieldIndex(Params.Values, field_name).?)].id;
 
-        setValue(param_id, value);
+        self.setValue(param_id, value);
 
         var e = c.clap_event_param_value_t{
             .header = .{
@@ -375,16 +377,16 @@ const Latency = struct {
 
 const State = struct {
     fn save(plugin: [*c]const c.clap_plugin_t, stream: [*c]const c.clap_ostream_t) callconv(.C) bool {
-        _ = plugin;
-        Params.writeAll(stream) catch {
+        var plug = c_cast(*MyPlugin, plugin.*.plugin_data);
+        plug.params.writeAll(stream) catch {
             return false;
         };
         return true;
     }
 
     fn load(plugin: [*c]const c.clap_plugin_t, stream: [*c]const c.clap_istream_t) callconv(.C) bool {
-        _ = plugin;
-        Params.readAll(stream) catch {
+        var plug = c_cast(*MyPlugin, plugin.*.plugin_data);
+        plug.params.readAll(stream) catch {
             return false;
         };
         return true;
@@ -406,6 +408,7 @@ pub const MyPlugin = struct {
     hostLog: ?*const c.clap_host_log_t,
     hostLatency: [*c]const c.clap_host_latency_t,
     hostThreadCheck: [*c]const c.clap_host_thread_check_t,
+    params: Params = Params{},
 
     const desc = c.clap_plugin_descriptor_t{
         .clap_version = c.clap_version_t{ .major = c.CLAP_VERSION_MAJOR, .minor = c.CLAP_VERSION_MINOR, .revision = c.CLAP_VERSION_REVISION },
@@ -573,18 +576,18 @@ pub const MyPlugin = struct {
                 }
             }
 
-            const gain_main = @floatCast(f32, Params.values.gain_amplitude_main);
+            const gain_main = @floatCast(f32, plug.params.values.gain_amplitude_main);
 
             const loop_sample_length = @floatToInt(usize, std.math.round(plug.sample_rate * 60.0 / plug.tempo));
             const loop_sample_length_quarter = loop_sample_length / 4;
-            const beat_on_sample_length = loop_sample_length_quarter + @floatToInt(usize, @intToFloat(f64, loop_sample_length_quarter / 2) * Params.values.swing);
+            const beat_on_sample_length = loop_sample_length_quarter + @floatToInt(usize, @intToFloat(f64, loop_sample_length_quarter / 2) * plug.params.values.swing);
             const beat_off_sample_length = (loop_sample_length_quarter * 2) - beat_on_sample_length;
 
-            const length_a = @floatToInt(usize, std.math.round((Params.values.length_a / 1000.0) * plug.sample_rate));
-            const length_d_1 = @floatToInt(usize, std.math.round((Params.values.length_d_beat_1 / 1000.0) * plug.sample_rate));
-            const length_d_2 = @floatToInt(usize, std.math.round((Params.values.length_d_beat_2 / 1000.0) * plug.sample_rate));
-            const length_d_3 = @floatToInt(usize, std.math.round((Params.values.length_d_beat_3 / 1000.0) * plug.sample_rate));
-            const length_d_4 = @floatToInt(usize, std.math.round((Params.values.length_d_beat_4 / 1000.0) * plug.sample_rate));
+            const length_a = @floatToInt(usize, std.math.round((plug.params.values.length_a / 1000.0) * plug.sample_rate));
+            const length_d_1 = @floatToInt(usize, std.math.round((plug.params.values.length_d_beat_1 / 1000.0) * plug.sample_rate));
+            const length_d_2 = @floatToInt(usize, std.math.round((plug.params.values.length_d_beat_2 / 1000.0) * plug.sample_rate));
+            const length_d_3 = @floatToInt(usize, std.math.round((plug.params.values.length_d_beat_3 / 1000.0) * plug.sample_rate));
+            const length_d_4 = @floatToInt(usize, std.math.round((plug.params.values.length_d_beat_4 / 1000.0) * plug.sample_rate));
 
             while (frame_index < next_event_frame) : (frame_index += 1) {
                 if (play) {
@@ -614,15 +617,15 @@ pub const MyPlugin = struct {
                         else => unreachable,
                     });
                     const gain_beat = switch (beat.num) {
-                        0 => @floatCast(f32, Params.values.gain_amplitude_beat_1),
-                        1 => @floatCast(f32, Params.values.gain_amplitude_beat_2),
-                        2 => @floatCast(f32, Params.values.gain_amplitude_beat_3),
-                        3 => @floatCast(f32, Params.values.gain_amplitude_beat_4),
+                        0 => @floatCast(f32, plug.params.values.gain_amplitude_beat_1),
+                        1 => @floatCast(f32, plug.params.values.gain_amplitude_beat_2),
+                        2 => @floatCast(f32, plug.params.values.gain_amplitude_beat_3),
+                        3 => @floatCast(f32, plug.params.values.gain_amplitude_beat_4),
                         else => unreachable,
                     };
 
                     const out_0 = util.randAmplitudeValue() * gain_main * gain_beat * saw;
-                    const out_1 = if (Params.values.stereo == 0.0) out_0 else util.randAmplitudeValue() * gain_main * gain_beat * saw;
+                    const out_1 = if (plug.params.values.stereo == 0.0) out_0 else util.randAmplitudeValue() * gain_main * gain_beat * saw;
 
                     const out = [2]f32{
                         out_0,
@@ -648,7 +651,7 @@ pub const MyPlugin = struct {
             switch (hdr.*.type) {
                 c.CLAP_EVENT_PARAM_VALUE => {
                     const ev = c_cast([*c]const c.clap_event_param_value_t, hdr);
-                    Params.setValue(ev.*.param_id, ev.*.value);
+                    plug.params.setValue(ev.*.param_id, ev.*.value);
                 },
                 c.CLAP_EVENT_TRANSPORT => {
                     const ev = c_cast([*c]const c.clap_event_transport_t, hdr);
@@ -672,7 +675,7 @@ pub const MyPlugin = struct {
                         176 => { // CC
                             if (ev.*.data[1] == 1) {
                                 const value = @intToFloat(f32, ev.*.data[2]) / 127.0;
-                                Params.setValueTellHost("gain_amplitude_main", value, hdr.*.time, out_events);
+                                plug.params.setValueTellHost("gain_amplitude_main", value, hdr.*.time, out_events);
                             }
                         },
                         else => {},
