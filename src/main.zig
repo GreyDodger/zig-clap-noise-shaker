@@ -410,6 +410,15 @@ pub const MyPlugin = struct {
     hostThreadCheck: [*c]const c.clap_host_thread_check_t,
     params: Params = Params{},
 
+    prev_sample: [2]f32 = [2]f32{
+        0.0,
+        0.0,
+    },
+    on_sample: usize = 0,
+    play: bool = false,
+    block_sample_start: usize = 0,
+    on_block_sample: usize = 0,
+
     const desc = c.clap_plugin_descriptor_t{
         .clap_version = c.clap_version_t{ .major = c.CLAP_VERSION_MAJOR, .minor = c.CLAP_VERSION_MINOR, .revision = c.CLAP_VERSION_REVISION },
         .id = "michael-flaherty.Noise-Shaker",
@@ -534,23 +543,14 @@ pub const MyPlugin = struct {
         return &p.plugin;
     }
 
-    var prev_sample = [2]f32{
-        0.0,
-        0.0,
-    };
-    var on_sample: usize = 0;
-    var play: bool = false;
-    var block_sample_start: usize = 0;
-    var on_block_sample: usize = 0;
-
     fn do_process(plugin: [*c]const c.clap_plugin_t, process: [*c]const c.clap_process_t) callconv(.C) c.clap_process_status {
         var plug = c_cast(*MyPlugin, plugin.*.plugin_data);
 
         plug.tempo = process.*.transport.*.tempo;
 
         const pos_seconds = @intToFloat(f64, process.*.transport.*.song_pos_seconds) / @intToFloat(f64, @as(i64, 1 << 31));
-        block_sample_start = @floatToInt(usize, std.math.round(pos_seconds * plug.sample_rate));
-        on_block_sample = 0;
+        plug.block_sample_start = @floatToInt(usize, std.math.round(pos_seconds * plug.sample_rate));
+        plug.on_block_sample = 0;
 
         const num_frames = process.*.frames_count;
         const num_events = process.*.in_events.*.size.?(process.*.in_events);
@@ -590,9 +590,9 @@ pub const MyPlugin = struct {
             const length_d_4 = @floatToInt(usize, std.math.round((plug.params.values.length_d_beat_4 / 1000.0) * plug.sample_rate));
 
             while (frame_index < next_event_frame) : (frame_index += 1) {
-                if (play) {
+                if (plug.play) {
                     const beat: struct { sample: usize, num: usize } = get_beat: {
-                        var sample = on_sample % loop_sample_length;
+                        var sample = plug.on_sample % loop_sample_length;
                         var sample_length: usize = 0;
                         if (sample < sample_length + beat_on_sample_length) {
                             break :get_beat .{ .sample = sample, .num = 0 };
@@ -635,11 +635,11 @@ pub const MyPlugin = struct {
                     process.*.audio_outputs[0].data32[0][frame_index] = out[0];
                     process.*.audio_outputs[0].data32[1][frame_index] = out[1];
 
-                    on_sample += 1;
-                    prev_sample = out;
+                    plug.on_sample += 1;
+                    plug.prev_sample = out;
                 }
 
-                on_block_sample += 1;
+                plug.on_block_sample += 1;
             }
         }
 
@@ -663,14 +663,14 @@ pub const MyPlugin = struct {
                         0x90 => { // Note On
                             const velocity = ev.*.data[2];
                             if (velocity == 0) {
-                                play = false;
+                                plug.play = false;
                             } else {
-                                play = true;
-                                on_sample = block_sample_start + on_block_sample;
+                                plug.play = true;
+                                plug.on_sample = plug.block_sample_start + plug.on_block_sample;
                             }
                         },
                         0x80 => { // Note Off
-                            play = false;
+                            plug.play = false;
                         },
                         176 => { // CC
                             if (ev.*.data[1] == 1) {
