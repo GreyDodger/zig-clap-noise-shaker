@@ -122,7 +122,7 @@ pub const Params = struct {
                     .module = undefined,
                     .min_value = value_metas[index].min_value,
                     .max_value = value_metas[index].max_value,
-                    .default_value = @ptrCast(*const f64, @alignCast(@alignOf(field.field_type), field.default_value.?)).*,
+                    .default_value = @ptrCast(*const f64, @alignCast(@alignOf(field.type), field.default_value.?)).*,
                     .flags = flags,
                     .cookie = null,
                 };
