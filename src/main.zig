@@ -77,7 +77,7 @@ pub const Params = struct {
 
     fn idToValueIndex(id: u32) !usize {
         const fields = std.meta.fields(Values);
-        inline for (fields) |_, field_index| {
+        inline for (fields, 0..) |_, field_index| {
             if (value_metas[field_index].id == id) {
                 return field_index;
             }
@@ -86,7 +86,7 @@ pub const Params = struct {
     }
     fn idToValue(self: Params, id: u32) !f64 {
         const fields = std.meta.fields(Values);
-        inline for (fields) |field, field_index| {
+        inline for (fields, 0..) |field, field_index| {
             if (value_metas[field_index].id == id) {
                 return @field(self.values, field.name);
             }
@@ -95,7 +95,7 @@ pub const Params = struct {
     }
     fn idToValuePtr(self: *Params, id: u32) !*f64 {
         const fields = std.meta.fields(Values);
-        inline for (fields) |field, field_index| {
+        inline for (fields, 0..) |field, field_index| {
             if (value_metas[field_index].id == id) {
                 return &@field(self.values, field.name);
             }
@@ -122,7 +122,7 @@ pub const Params = struct {
                     .module = undefined,
                     .min_value = value_metas[index].min_value,
                     .max_value = value_metas[index].max_value,
-                    .default_value = @ptrCast(*const f64, @alignCast(@alignOf(field.type), field.default_value.?)).*,
+                    .default_value = @as(*const f64, @alignCast(@ptrCast(field.default_value.?))).*,
                     .flags = flags,
                     .cookie = null,
                 };
@@ -155,7 +155,7 @@ pub const Params = struct {
                 _ = std.fmt.bufPrintZ(buf, "{s}", .{if (value == 0.0) "false" else "true"}) catch unreachable;
             },
             .VolumeAmp => {
-                const display = util.amplitudeTodB(@floatCast(f32, value));
+                const display = util.amplitudeTodB(@as(f32, @floatCast(value)));
                 _ = std.fmt.bufPrintZ(buf, "{d:.4} dB", .{display}) catch unreachable;
             },
             .TimeMilliseconds => {
@@ -180,7 +180,7 @@ pub const Params = struct {
             .VolumeAmp => {
                 const str: []const u8 = blk: {
                     var str: []const u8 = std.mem.span(display);
-                    str.len = for (str) |char, char_index| {
+                    str.len = for (str, 0..) |char, char_index| {
                         if (char == ' ') {
                             break char_index;
                         }
@@ -194,7 +194,7 @@ pub const Params = struct {
             else => {
                 const str: []const u8 = blk: {
                     var str: []const u8 = std.mem.span(display);
-                    str.len = for (str) |char, char_index| {
+                    str.len = for (str, 0..) |char, char_index| {
                         if (char == ' ') {
                             break char_index;
                         }
@@ -242,7 +242,7 @@ pub const Params = struct {
     fn writeAll(self: Params, stream: *const c.clap_ostream_t) !void {
         const fields = std.meta.fields(Values);
         try write(stream, fields.len);
-        inline for (fields) |field, field_index| {
+        inline for (fields, 0..) |field, field_index| {
             try write(stream, Params.value_metas[field_index].id);
             try write(stream, @field(self.values, field.name));
         }
@@ -253,7 +253,7 @@ pub const Params = struct {
         var i: usize = 0;
         while (i < num_values) : (i += 1) {
             const id = try read(stream, u32);
-            inline for (value_metas) |meta, meta_index| {
+            inline for (value_metas, 0..) |meta, meta_index| {
                 if (id == meta.id) {
                     @field(self.values, fields[meta_index].name) = try read(stream, f64);
                     break;
@@ -271,7 +271,7 @@ pub const Params = struct {
         }).* = value;
     }
     pub fn setValueTellHost(self: *Params, comptime field_name: []const u8, value: f64, time: u32, out_events: *const c.clap_output_events_t) void {
-        const param_id = Params.value_metas[@intCast(u32, std.meta.fieldIndex(Params.Values, field_name).?)].id;
+        const param_id = Params.value_metas[@as(u32, @intCast(std.meta.fieldIndex(Params.Values, field_name).?))].id;
 
         self.setValue(param_id, value);
 
@@ -548,8 +548,8 @@ pub const MyPlugin = struct {
 
         plug.tempo = process.*.transport.*.tempo;
 
-        const pos_seconds = @intToFloat(f64, process.*.transport.*.song_pos_seconds) / @intToFloat(f64, @as(i64, 1 << 31));
-        plug.block_sample_start = @floatToInt(usize, std.math.round(pos_seconds * plug.sample_rate));
+        const pos_seconds = @as(f64, @floatFromInt(process.*.transport.*.song_pos_seconds)) / @as(f64, @floatFromInt(@as(i64, 1 << 31)));
+        plug.block_sample_start = @as(usize, @intFromFloat(std.math.round(pos_seconds * plug.sample_rate)));
         plug.on_block_sample = 0;
 
         const num_frames = process.*.frames_count;
@@ -576,18 +576,18 @@ pub const MyPlugin = struct {
                 }
             }
 
-            const gain_main = @floatCast(f32, plug.params.values.gain_amplitude_main);
+            const gain_main = @as(f32, @floatCast(plug.params.values.gain_amplitude_main));
 
-            const loop_sample_length = @floatToInt(usize, std.math.round(plug.sample_rate * 60.0 / plug.tempo));
+            const loop_sample_length = @as(usize, @intFromFloat(std.math.round(plug.sample_rate * 60.0 / plug.tempo)));
             const loop_sample_length_quarter = loop_sample_length / 4;
-            const beat_on_sample_length = loop_sample_length_quarter + @floatToInt(usize, @intToFloat(f64, loop_sample_length_quarter / 2) * plug.params.values.swing);
+            const beat_on_sample_length = loop_sample_length_quarter + @as(usize, @intFromFloat(@as(f64, @floatFromInt(loop_sample_length_quarter / 2)) * plug.params.values.swing));
             const beat_off_sample_length = (loop_sample_length_quarter * 2) - beat_on_sample_length;
 
-            const length_a = @floatToInt(usize, std.math.round((plug.params.values.length_a / 1000.0) * plug.sample_rate));
-            const length_d_1 = @floatToInt(usize, std.math.round((plug.params.values.length_d_beat_1 / 1000.0) * plug.sample_rate));
-            const length_d_2 = @floatToInt(usize, std.math.round((plug.params.values.length_d_beat_2 / 1000.0) * plug.sample_rate));
-            const length_d_3 = @floatToInt(usize, std.math.round((plug.params.values.length_d_beat_3 / 1000.0) * plug.sample_rate));
-            const length_d_4 = @floatToInt(usize, std.math.round((plug.params.values.length_d_beat_4 / 1000.0) * plug.sample_rate));
+            const length_a = @as(usize, @intFromFloat(std.math.round((plug.params.values.length_a / 1000.0) * plug.sample_rate)));
+            const length_d_1 = @as(usize, @intFromFloat(std.math.round((plug.params.values.length_d_beat_1 / 1000.0) * plug.sample_rate)));
+            const length_d_2 = @as(usize, @intFromFloat(std.math.round((plug.params.values.length_d_beat_2 / 1000.0) * plug.sample_rate)));
+            const length_d_3 = @as(usize, @intFromFloat(std.math.round((plug.params.values.length_d_beat_3 / 1000.0) * plug.sample_rate)));
+            const length_d_4 = @as(usize, @intFromFloat(std.math.round((plug.params.values.length_d_beat_4 / 1000.0) * plug.sample_rate)));
 
             while (frame_index < next_event_frame) : (frame_index += 1) {
                 if (plug.play) {
@@ -617,10 +617,10 @@ pub const MyPlugin = struct {
                         else => unreachable,
                     });
                     const gain_beat = switch (beat.num) {
-                        0 => @floatCast(f32, plug.params.values.gain_amplitude_beat_1),
-                        1 => @floatCast(f32, plug.params.values.gain_amplitude_beat_2),
-                        2 => @floatCast(f32, plug.params.values.gain_amplitude_beat_3),
-                        3 => @floatCast(f32, plug.params.values.gain_amplitude_beat_4),
+                        0 => @as(f32, @floatCast(plug.params.values.gain_amplitude_beat_1)),
+                        1 => @as(f32, @floatCast(plug.params.values.gain_amplitude_beat_2)),
+                        2 => @as(f32, @floatCast(plug.params.values.gain_amplitude_beat_3)),
+                        3 => @as(f32, @floatCast(plug.params.values.gain_amplitude_beat_4)),
                         else => unreachable,
                     };
 
@@ -674,7 +674,7 @@ pub const MyPlugin = struct {
                         },
                         176 => { // CC
                             if (ev.*.data[1] == 1) {
-                                const value = @intToFloat(f32, ev.*.data[2]) / 127.0;
+                                const value = @as(f32, @floatFromInt(ev.*.data[2])) / 127.0;
                                 plug.params.setValueTellHost("gain_amplitude_main", value, hdr.*.time, out_events);
                             }
                         },
@@ -702,7 +702,7 @@ const Factory = struct {
         if (!clap_version_is_compatible(host.*.clap_version)) {
             return null;
         }
-        if (std.cstr.cmp(plugin_id, MyPlugin.desc.id) == 0) {
+        if (std.mem.orderZ(u8, plugin_id, MyPlugin.desc.id) == .eq) {
             return MyPlugin.create(host);
         }
         return null;
@@ -733,7 +733,7 @@ const Entry = struct {
     }
     fn deinit() callconv(.C) void {}
     fn get_factory(factory_id: [*c]const u8) callconv(.C) ?*const anyopaque {
-        if (std.cstr.cmp(factory_id, &c.CLAP_PLUGIN_FACTORY_ID) == 0) {
+        if (std.mem.orderZ(u8, factory_id, &c.CLAP_PLUGIN_FACTORY_ID) == .eq) {
             return &Factory.Data;
         }
         return null;

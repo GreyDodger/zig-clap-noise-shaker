@@ -15,11 +15,11 @@ pub inline fn randAmplitudeValue() f32 {
 }
 
 pub inline fn sawWave(on_sample: usize, wavelength: usize) f32 {
-    return @intToFloat(f32, on_sample % wavelength) / @intToFloat(f32, wavelength - 1);
+    return @as(f32, @floatFromInt(on_sample % wavelength)) / @as(f32, @floatFromInt(wavelength - 1));
 }
 
 pub inline fn sawWaveBackwards(on_sample: usize, wavelength: usize) f32 {
-    return @intToFloat(f32, (wavelength - 1) - (on_sample % wavelength)) / @intToFloat(f32, wavelength - 1);
+    return @as(f32, @floatFromInt((wavelength - 1) - (on_sample % wavelength))) / @as(f32, @floatFromInt(wavelength - 1));
 }
 
 pub inline fn envAD(on_sample: usize, length_a: usize, length_d: usize) f32 {
