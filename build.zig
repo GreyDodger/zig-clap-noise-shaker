@@ -29,6 +29,7 @@ pub fn build(b: *std.Build) void {
     exe.addIncludePath(.{ .path = "src" });
 
     const rename_dll_step = CreateClapPluginStep.create(b, exe);
+    rename_dll_step.step.dependOn(&b.addInstallArtifact(exe, .{}).step);
     b.getInstallStep().dependOn(&rename_dll_step.step);
 }
 
@@ -44,14 +45,11 @@ pub const CreateClapPluginStep = struct {
     pub fn create(b: *std.Build, artifact: *Step.Compile) *Self {
         const self = b.allocator.create(Self) catch unreachable;
         const name = "create clap plugin";
-
         self.* = Self{
             .step = Step.init(Step.StepOptions{ .id = .top_level, .name = name, .owner = b, .makeFn = make }),
             .build = b,
             .artifact = artifact,
         };
-
-        self.step.dependOn(&artifact.step);
         return self;
     }
 
