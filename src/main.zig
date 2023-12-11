@@ -146,8 +146,8 @@ pub const Params = struct {
     }
     fn value_to_text(plugin: [*c]const c.clap_plugin_t, id: c.clap_id, value: f64, buf_ptr: [*c]u8, buf_size: u32) callconv(.C) bool {
         _ = plugin;
-        var buf: []u8 = buf_ptr[0..buf_size];
-        var index = idToValueIndex(id) catch {
+        const buf: []u8 = buf_ptr[0..buf_size];
+        const index = idToValueIndex(id) catch {
             return false;
         };
         switch (value_metas[index].t) {
@@ -169,7 +169,7 @@ pub const Params = struct {
     }
     fn text_to_value(plugin: [*c]const c.clap_plugin_t, id: c.clap_id, display: [*c]const u8, out: [*c]f64) callconv(.C) bool {
         _ = plugin;
-        var index = idToValueIndex(id) catch {
+        const index = idToValueIndex(id) catch {
             return false;
         };
         switch (value_metas[index].t) {
@@ -366,7 +366,7 @@ const AudioPorts = struct {
 
 const Latency = struct {
     fn get(plugin: [*c]const c.clap_plugin_t) callconv(.C) u32 {
-        var plug = c_cast(*MyPlugin, plugin.*.plugin_data);
+        const plug = c_cast(*MyPlugin, plugin.*.plugin_data);
         return plug.*.latency;
     }
 
@@ -437,29 +437,29 @@ pub const MyPlugin = struct {
     };
 
     fn init(plugin: [*c]const c.clap_plugin_t) callconv(.C) bool {
-        var plug = c_cast(*MyPlugin, plugin.*.plugin_data);
+        const plug = c_cast(*MyPlugin, plugin.*.plugin_data);
 
         // Fetch host's extensions here
         {
-            var ptr = plug.*.host.*.get_extension.?(plug.*.host, &c.CLAP_EXT_LOG);
+            const ptr = plug.*.host.*.get_extension.?(plug.*.host, &c.CLAP_EXT_LOG);
             if (ptr != null) {
                 plug.*.hostLog = c_cast(*const c.clap_host_log_t, ptr);
             }
         }
         {
-            var ptr = plug.*.host.*.get_extension.?(plug.*.host, &c.CLAP_EXT_THREAD_CHECK);
+            const ptr = plug.*.host.*.get_extension.?(plug.*.host, &c.CLAP_EXT_THREAD_CHECK);
             if (ptr != null) {
                 plug.*.hostThreadCheck = c_cast(*const c.clap_host_thread_check_t, ptr);
             }
         }
         {
-            var ptr = plug.*.host.*.get_extension.?(plug.*.host, &c.CLAP_EXT_LATENCY);
+            const ptr = plug.*.host.*.get_extension.?(plug.*.host, &c.CLAP_EXT_LATENCY);
             if (ptr != null) {
                 plug.*.hostLatency = c_cast(*const c.clap_host_latency_t, ptr);
             }
         }
         {
-            var ptr = plug.*.host.*.get_extension.?(plug.*.host, &c.CLAP_EXT_PARAMS);
+            const ptr = plug.*.host.*.get_extension.?(plug.*.host, &c.CLAP_EXT_PARAMS);
             if (ptr != null) {
                 plug.*.hostParams = c_cast(*const c.clap_host_params_t, ptr);
             }
@@ -592,7 +592,7 @@ pub const MyPlugin = struct {
             while (frame_index < next_event_frame) : (frame_index += 1) {
                 if (plug.play) {
                     const beat: struct { sample: usize, num: usize } = get_beat: {
-                        var sample = plug.on_sample % loop_sample_length;
+                        const sample = plug.on_sample % loop_sample_length;
                         var sample_length: usize = 0;
                         if (sample < sample_length + beat_on_sample_length) {
                             break :get_beat .{ .sample = sample, .num = 0 };
